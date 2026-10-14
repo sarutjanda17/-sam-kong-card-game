@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เกมไพ่สามกอง</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;background:#073d30;color:white;
+  font-family:Arial,sans-serif;padding:12px;
+}
+.app{max-width:650px;margin:auto}
+h1{text-align:center;font-size:27px;margin:12px 0 5px}
+.sub{text-align:center;color:#c9e6dc;font-size:13px;margin-bottom:18px}
+.panel{
+  background:#105344;border:1px solid #397767;
+  border-radius:14px;padding:12px;margin:12px 0;
+}
+button{
+  border:0;border-radius:10px;padding:12px;
+  font-size:15px;font-weight:bold;cursor:pointer;
+}
+.primary{background:#ffd166;color:#292929;width:100%}
+.secondary{background:#e7f4ef;color:#164b3e}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.actions button{flex:1}
+.hand{display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
+.card{
+  background:#fff;color:#171717;border-radius:7px;
+  width:47px;height:65px;border:2px solid white;
+  display:flex;flex-direction:column;justify-content:space-between;
+  padding:4px;font-size:17px;font-weight:bold;
+  box-shadow:0 2px 4px #001c15;cursor:pointer;
+}
+.card.red{color:#d52b35}
+.card.selected{outline:3px solid #ffd166;transform:translateY(-4px)}
+.card small{font-size:10px}
+.card.empty{
+  background:#174e41;border:1px dashed #8cb5a8;
+  color:#c5dfd6;box-shadow:none;cursor:pointer;
+  justify-content:center;align-items:center;font-size:12px;
+}
+.rowtitle{display:flex;justify-content:space-between;align-items:center}
+.rowtitle h2{font-size:17px;margin:2px 0 10px}
+.count{font-size:12px;color:#c9e6dc}
+.slots{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.hint{font-size:13px;color:#d2e8df;line-height:1.6}
+.status{font-size:14px;text-align:center;margin-top:10px;color:#ffe39a}
+#result{white-space:pre-line;line-height:1.8;font-size:14px}
+footer{text-align:center;color:#b8d8cd;font-size:12px;padding:12px}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>🃏 ไพ่สามกอง</h1>
+  <div class="sub">เกมไพ่โป๊กเกอร์ 13 ใบ · ทดลองเล่นบนมือถือ</div>
+
+  <div class="panel">
+    <button class="primary" id="deal">🎴 แจกไพ่ใหม่ 13 ใบ</button>
+    <p class="hint">
+      วิธีเล่น: แตะไพ่ในมือเพื่อเลือก แล้วเลือกกองที่ต้องการ
+      แตะไพ่ในกองเพื่อย้ายกลับเข้ามือได้
+    </p>
+    <div id="hand" class="hand"></div>
+    <div class="status" id="status" aria-live="polite">
+      กดแจกไพ่เพื่อเริ่มเล่น
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="rowtitle">
+      <h2>🔺 กองบน</h2><span class="count" id="n0">0/3 ใบ</span>
+    </div>
+    <div class="slots" id="top"></div>
+    <div class="actions">
+      <button class="secondary" data-target="0">ใส่กองบน</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="rowtitle">
+      <h2>🔶 กองกลาง</h2><span class="count" id="n1">0/5 ใบ</span>
+    </div>
+    <div class="slots" id="middle"></div>
+    <div class="actions">
+      <button class="secondary" data-target="1">ใส่กองกลาง</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="rowtitle">
+      <h2>🔻 กองล่าง</h2><span class="count" id="n2">0/5 ใบ</span>
+    </div>
+    <div class="slots" id="bottom"></div>
+    <div class="actions">
+      <button class="secondary" data-target="2">ใส่กองล่าง</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <button class="primary" id="check">🔍 ตรวจสอบไพ่และคะแนนพิเศษ</button>
+    <div id="result" class="hint"></div>
+    <div class="actions">
+      <button class="secondary" id="reset">↩️ เริ่มจัดไพ่ใหม่</button>
+    </div>
+  </div>
+  <footer>เกมสามกอง · เวอร์ชันทดลองบนเครื่องเดียว</footer>
+</div>
+
+<script>
+(function(){
+const suits=[
+  {s:"♠",red:false},{s:"♥",red:true},
+  {s:"♦",red:true},{s:"♣",red:false}
+];
+const ranks=[
+  {v:2,t:"2"},{v:3,t:"3"},{v:4,t:"4"},
+  {v:5,t:"5"},{v:6,t:"6"},{v:7,t:"7"},
+  {v:8,t:"8"},{v:9,t:"9"},{v:10,t:"10"},
+  {v:11,t:"J"},{v:12,t:"Q"},{v:13,t:"K"},{v:14,t:"A"}
+];
+const names=["top","middle","bottom"];
+const limits=[3,5,5];
+let hand=[],piles=[[],[],[]],selected=null,started=false;
+
+const $=id=>document.getElementById(id);
+function makeDeck(){
+  const d=[];
+  suits.forEach(s=>ranks.forEach(r=>
+    d.push({v:r.v,t:r.t,s:s.s,red:s.red,id:r.t+s.s})
+  ));
+  for(let i=d.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [d[i],d[j]]=[d[j],d[i]];
+  }
+  return d;
+}
+function cardHTML(c,extra=""){
+  return '<div class="card '+(c.red?'red ':'')+extra+'" data-id="'+c.id+'">'+
+    '<span>'+c.t+'</span><span style="text-align:center">'+c.s+
+    '</span><small>'+c.t+c.s+'</small></div>';
+}
+function sortCards(a){
+  return a.slice().sort((x,y)=>y.v-x.v);
+}
+function render(){
+  $("hand").innerHTML=hand.map(c=>
+    cardHTML(c,selected===c.id?"selected":"")
+  ).join("");
+  names.forEach((id,i)=>{
+    $(id).innerHTML="";
+    for(let n=0;n<limits[i];n++){
+      if(piles[i][n]){
+        $(id).insertAdjacentHTML("beforeend",cardHTML(piles[i][n]));
+      }else{
+        $(id).insertAdjacentHTML("beforeend",
+          '<div class="card empty" data-empty="'+i+'">วางไพ่</div>');
+      }
+    }
+    $("n"+i).textContent=piles[i].length+"/"+limits[i]+" ใบ";
+  });
+  $("status").textContent=!started?"กดแจกไพ่เพื่อเริ่มเล่น":
+    "ไพ่ในมือ "+hand.length+" ใบ · เลือกไพ่แล้วเลือกกอง";
+}
+function deal(){
+  const d=makeDeck();
+  hand=d.slice(0,13);
+  piles=[[],[],[]];selected=null;started=true;
+  $("result").textContent="";
+  render();
+}
+function place(i){
+  if(!started){$("status").textContent="กรุณากดแจกไพ่ก่อน";return}
+  if(!selected){$("status").textContent="กรุณาแตะเลือกไพ่ก่อน";return}
+  if(piles[i].length>=limits[i]){
+    $("status").textContent="กองนี้เต็มแล้วครับ";return;
+  }
+  const idx=hand.findIndex(c=>c.id===selected);
+  if(idx<0)return;
+  piles[i].push(hand.splice(idx,1)[0]);
+  selected=null;render();
+}
+function returnCard(id){
+  for(let i=0;i<3;i++){
+    const idx=piles[i].findIndex(c=>c.id===id);
+    if(idx>=0){
+      hand.push(piles[i].splice(idx,1)[0]);
+      selected=null;render();return;
+    }
+  }
+}
+function evaluate(cards){
+  const a=sortCards(cards);
+  const counts={};
+  a.forEach(c=>counts[c.v]=(counts[c.v]||0)+1);
+  const groups=Object.entries(counts)
+    .map(([v,n])=>({v:+v,n}))
+    .sort((x,y)=>y.n-x.n||y.v-x.v);
+  const flush=a.every(c=>c.s===a[0].s);
+  let vals=[...new Set(a.map(c=>c.v))].sort((x,y)=>y-x);
+  let straight=vals.length===5&&vals[0]-vals[4]===4;
+  if(vals.join(",")==="14,5,4,3,2")straight=true;
+  let cat=0,name="ไพ่สูง";
+  if(cards.length===3){
+    if(groups[0].n===3){cat=3;name="ตอง"}
+    else if(groups[0].n===2){cat=1;name="คู่"}
+  }else{
+    if(straight&&flush&&vals[0]===14&&vals[1]===13){
+      cat=9;name="รอยัลสเตรทฟลัช";
+    }else if(straight&&flush){cat=8;name="สเตรทฟลัช"}
+    else if(groups[0].n===4){cat=7;name="โฟร์การ์ด"}
+    else if(groups[0].n===3&&groups[1].n===2){
+      cat=6;name="ฟูลเฮาส์";
+    }else if(flush){cat=5;name="ฟลัช"}
+    else if(straight){cat=4;name="สเตรท"}
+    else if(groups[0].n===3){cat=3;name="ตอง"}
+    else if(groups[0].n===2&&groups[1].n===2){
+      cat=2;name="สองคู่";
+    }else if(groups[0].n===2){cat=1;name="หนึ่งคู่"}
+  }
+  const tie=groups.map(g=>g.v);
+  a.forEach(c=>{if(!tie.includes(c.v))tie.push(c.v)});
+  return {cat,name,tie,groups,flush,straight,vals};
+}
+function compare(a,b){
+  const x=evaluate(a),y=evaluate(b);
+  if(x.cat!==y.cat)return x.cat>y.cat?1:-1;
+  for(let i=0;i<Math.max(x.tie.length,y.tie.length);i++){
+    const xv=x.tie[i]||0,yv=y.tie[i]||0;
+    if(xv!==yv)return xv>yv?1:-1;
+  }
+  return 0;
+}
+function bonus(cards,i){
+  const e=evaluate(cards);
+  if(i===0){
+    if(e.groups[0].n===3)return e.groups[0].v===14?10:5;
+    if(e.groups[0].n===2&&e.groups[0].v===14)return 2;
+    return 0;
+  }
+  if(i===2){
+    if(e.cat===9)return 12;
+    if(e.cat===8)return 7;
+    if(e.cat===7)return 6;
+    if(e.cat===6&&e.groups[0].v===14)return 2;
+    return 0;
+  }
+  if(i===1){
+    if(e.cat===9)return 24;
+    if(e.cat===8)return 14;
+    if(e.cat===7)return 12;
+    if(e.cat===6&&e.groups[0].v===14)return 4;
+    if(e.cat===6)return 2;
+  }
+  return 0;
+}
+function check(){
+  if(!started){$("result").textContent="กรุณาแจกไพ่ก่อน";return}
+  if(hand.length!==0||piles.some((p,i)=>p.length!==limits[i])){
+    $("result").textContent="กรุณาจัดไพ่ให้ครบ 13 ใบก่อน";
+    return;
+  }
+  if(compare(piles[2],piles[1])<0||compare(piles[1],piles[0])<0){
+    $("result").textContent=
+      "⚠️ ไพ่ยังไม่เรียงตามกติกา!\n"+
+      "กองล่างต้องแข็งแรงอย่างน้อยเท่ากองกลาง "+
+      "และกองกลางต้องแข็งแรงอย่างน้อยเท่ากองบน";
+    return;
+  }
+  let lines=["ตรวจสอบไพ่เรียบร้อย"];
+  piles.forEach((p,i)=>{
+    const e=evaluate(p),b=bonus(p,i);
+    lines.push(["กองบน","กองกลาง","กองล่าง"][i]+
+      ": "+e.name+(b?" · โบนัสพิเศษ "+b+" คะแนน":""));
+  });
+  lines.push("");
+  lines.push("นี่เป็นการตรวจไพ่ของผู้เล่นคนเดียว");
+  lines.push("การคิดคะแนนเทียบคู่แข่งจะเปิดใช้เมื่อเชื่อมต่อระบบออนไลน์");
+  $("result").textContent=lines.join("\n");
+}
+$("deal").addEventListener("click",deal);
+$("reset").addEventListener("click",()=>{
+  if(!started){deal();return}
+  hand=hand.concat(...piles);
+  piles=[[],[],[]];selected=null;$("result").textContent="";render();
+});
+$("check").addEventListener("click",check);
+$("hand").addEventListener("click",e=>{
+  const c=e.target.closest("[data-id]");
+  if(!c)return;
+  selected=selected===c.dataset.id?null:c.dataset.id;render();
+});
+names.forEach(id=>$(id).addEventListener("click",e=>{
+  const c=e.target.closest("[data-id]");
+  if(c)returnCard(c.dataset.id);
+}));
+document.querySelectorAll("[data-target]").forEach(b=>
+  b.addEventListener("click",()=>place(+b.dataset.target))
+);
+$("deal").focus();
+render();
+})();
+</script>
+</body>
+</html>
